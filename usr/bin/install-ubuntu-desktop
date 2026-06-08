@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Author        : Cathal Ranaghan
+# Description   : Safely migrate between Linux distribution flavours
+#                 without a clean install. Full restoration of the
+#                 pre-migration system state is not guaranteed.
+#
+# Copyright (C) 2026 Cathal Ranaghan
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+#!/usr/bin/env bash
+set -euo pipefail
+
+TRANS_BIN="$(dirname "${BASH_SOURCE[0]}")"
+TRANS_ROOT="$TRANS_BIN/../../"
+TRANS_LIB="$TRANS_ROOT/usr/lib/transystus"
+TRANS_VAR="$TRANS_ROOT/var"
+
+source "$TRANS_LIB/Common-Lib"
+
+check_root_and_lock_status
+
+LOG_DIR="$TRANS_VAR/log/transystus/Ubuntu Server To Desktop"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/migration-output-log-$TIMESTAMP.log"
+
+(
+### START MIGRATION ###
+
+# Section 1: System Update
+set_section "System Update"
+
+log INFO "Updating system..." 
+run "" update_system
+
+# Section 2: Ubuntu Desktop Packages
+set_section "Desktop Packages"
+
+log INFO "Installing Ubuntu Desktop Packages..."
+run "Ubuntu Desktop package installation failed." apt install -y "${UBUNTU_DESKTOP_PACKAGES[@]}"
+
+# Section 3: Package Flags
+set_section "Package Marking"
+
+log INFO "Marking Ubuntu Desktop packages automatically installed to align with a standard install..."
+run "Not all packages marked auto." apt-mark auto "${UBUNTU_DESKTOP_AUTOMATIC_PACKAGES[@]}"
+
+log INFO "Marking Ubuntu Desktop packages manually installed to align with a standard install..."
+run "Not all packages marked manual." apt-mark manual "${UBUNTU_DESKTOP_MANUAL_PACKAGES[@]}"
+
+# Section 4: Ubuntu Server Packages
+set_section "Server Packages"
+
+log INFO "Removing Ubuntu Server Packages..."
+run "Ubuntu Server package removal failed." apt --autoremove purge -y "${UBUNTU_SERVER_PACKAGES[@]}" "${UBUNTU_SERVER_LEFTOVER_PACKAGES[@]}"
+
+# Section 5: Snap Packages
+set_section "Snap Installation"
+
+log INFO "Installing Snap Packages..."
+run "Snap Packages failed to install." install_ubuntu_desktop_snaps
+
+# Section 6: System Configuration
+set_section "System Configuration"
+
+log INFO "Adding Ubuntu Desktop Cofiguration..."
+run "Unable to add Ubuntu Desktop Cofiguration." add_ubuntu_desktop_config
+
+log INFO "Removing Ubuntu Server Cofiguration..."
+run "Unable to remove Ubuntu Server Cofiguration." remove_ubuntu_server_config_and_data
+
+### END MIGRATION ###
+
+) 2>&1 | tee "$LOG_FILE"
+
+log INFO "Migration complete."
+
+confirm_reboot

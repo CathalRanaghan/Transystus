@@ -1,0 +1,146 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Author        : Cathal Ranaghan
+# Description   : Safely migrate between Linux distribution flavours
+#                 without a clean install. Full restoration of the
+#                 pre-migration system state is not guaranteed.
+#
+# Copyright (C) 2026 Cathal Ranaghan
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+#!/usr/bin/env bash
+set -euo pipefail
+COMM_BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+COMM_ROOT="$(cd "$COMM_BIN/../../.." && pwd)"
+COMM_LIB="$COMM_ROOT/usr/lib/transystus"
+COMM_VAR="$COMM_ROOT/var"
+
+source "$COMM_LIB/Ubuntu Desktop Assets/Ubuntu-Desktop-Lib"
+source "$COMM_LIB/Ubuntu Server Assets/Ubuntu-Server-Lib"
+
+export -f add_ubuntu_desktop_config
+export -f add_ubuntu_server_config
+export -f remove_ubuntu_desktop_config_and_data
+export -f remove_ubuntu_server_config_and_data
+
+### START VARIABLE DECLARATIONS ###
+
+# Color codes
+RED="\033[0;31m"
+GREEN="\033[0;32m"
+YELLOW="\033[1;33m"
+RESET="\033[0m"
+
+# Step counter
+_STEP=0
+_SECTION="General"
+
+TIMESTAMP="$(date +'%Y-%m-%d_%H-%M-%S')"
+
+### END VARIABLE DECLARATIONS ###
+
+### START FUNCTION DEFINITONS ###
+
+check_root_and_lock_status()
+{
+    if (( EUID != 0 )); then
+        echo "This script must be run with root privileges." >&2
+        exit 1
+    fi
+
+    mkdir -p /run/lock/transystus
+    LOCK_FILE="/run/lock/transystus/migration.lock"
+
+    if [[ -f "$LOCK_FILE" ]]; then
+        echo "Another migration is already running." >&2
+        exit 1
+    else
+        touch "$LOCK_FILE"
+        trap 'rm -f "$LOCK_FILE"' EXIT
+    fi
+}
+
+confirm_reboot()
+{
+    rm "$LOCK_FILE"
+    rmdir /run/lock/transystus 2>/dev/null || true
+
+    read -p "Do you want to reboot now? [y/N] " REBOOT_CHOICE < /dev/tty
+
+    case "$REBOOT_CHOICE" in
+        [yY]|[yY][eE][sS])
+            log INFO "Rebooting now..."
+            systemctl reboot -i
+            ;;
+        *)
+            read -p "Press enter to continue. " < /dev/tty
+            ;;
+    esac
+}
+
+get_snap_ids()
+{
+    snap saved --abs-time | tail -n +2 | awk '{print $1}'
+}
+
+# Logging helper with timestamp and color
+log()
+{
+    type="$1"
+    shift
+    color="$GREEN"
+    case "$type" in
+        INFO) color="$GREEN" ;;
+        WARN) color="$YELLOW" ;;
+        ERROR) color="$RED" ;;
+    esac
+    echo -e "$(date +'%F %T') [${type}] ${color}$*${RESET}"
+}
+
+# Run command with optional friendly error message
+run()
+{
+    errmsg="$1"
+	shift
+	echo -e "$(date +'%F %T') [${_SECTION}][Step $_STEP] Running: $*"
+	if ! "$@"; then
+		log WARN "$errmsg"
+	fi
+}
+
+remove_plymouth()
+{
+    run "Plymouth boot splash already removed." rm -f /usr/share/plymouth/themes/default.plymouth /var/lib/dpkg/alternatives/default.plymouth
+}
+
+# Set current section
+set_section() 
+{
+    _SECTION="$1"
+    _STEP=0   # reset step numbering per section
+    log INFO "=== Starting section: $_SECTION ==="
+}
+
+update_system()
+{
+    if ! (systemctl stop unattended-upgrades && apt update && apt full-upgrade -y); then
+        echo "System update failed."
+        exit 1
+    fi
+}
+
+### END FUNCTION DEFINITONS ###
+
+# Trap for errors
+trap 'echo -e "${RED}Migration failed at line $LINENO${RESET}"; exit 1' ERR
