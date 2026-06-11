@@ -7,7 +7,7 @@
 - [ ] Resolve permissions on copied files and directories within `/etc`
 - [ ] Update instance locking method
 - [ ] Use `-` instead of spaces for word separation in directories such as `Ubuntu Server Assets` or `Ubuntu Desktop Assets`
-- [ ] Use all lowercase characters for file names
+- [ ] Use all lowercase characters for file and directory names
 
 # Medium Term
 - [ ] Merge `install-ubuntu-desktop` and `install-ubuntu-server` into one script named `Transystus`
