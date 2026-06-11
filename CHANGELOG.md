@@ -1,4 +1,4 @@
-# Changelog
+# Changelog (v0.0.2-alpha)
 - Added more comments for clarification on certain code sections
 - Added `/usr/lib/os-release` updates during migration
 - Moved `#!/usr/bin/env bash` at the top of code files to prevent `Bad substitution` errors that halted scripts from running
