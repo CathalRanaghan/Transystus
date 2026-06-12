@@ -1,3 +1,4 @@
+#!/usr/bin/bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Author        : Cathal Ranaghan
@@ -19,7 +20,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#!/usr/bin/env bash
 set -euo pipefail
 
 TRANS_BIN="$(dirname "${BASH_SOURCE[0]}")"
@@ -27,11 +27,11 @@ TRANS_ROOT="$TRANS_BIN/../../"
 TRANS_LIB="$TRANS_ROOT/usr/lib/transystus"
 TRANS_VAR="$TRANS_ROOT/var"
 
-source "$TRANS_LIB/Common-Lib"
+source "$TRANS_LIB/common-lib"
 
 check_root_and_lock_status
 
-LOG_DIR="$TRANS_VAR/log/transystus/Ubuntu Server To Desktop"
+LOG_DIR="$TRANS_VAR/log/transystus/ubuntu-server-to-desktop"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/migration-output-log-$TIMESTAMP.log"
 
